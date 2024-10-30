@@ -1,9 +1,10 @@
-package me.timeto.app
-
 import android.content.ContentValues
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
+import androidx.activity.result.contract.ActivityResultContracts
 import me.timeto.shared.*
 import kotlin.jvm.Throws
 
@@ -27,32 +28,56 @@ object AutoBackupAndroid {
 
     @Throws
     suspend fun newBackup() {
-        val autoBackupData = AutoBackup.buildAutoBackup()
-
-        ///
-        /// IOException
-
-        val values = ContentValues()
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, autoBackupData.fileName)
-        values.put(MediaStore.MediaColumns.RELATIVE_PATH, AUTOBACKUPS_PATH) // RELATIVE_PATH require Build.VERSION_CODES.Q+
-        val fileUri = App.instance.contentResolver.insert(getVolume(), values)
-                      ?: throw Exception("AutoBackupAndroid.newBackup() contentResolver.insert() nullable")
-        val outputStream = App.instance.contentResolver.openOutputStream(fileUri)
-                           ?: throw Exception("AutoBackupAndroid.newBackup() contentResolver.openOutputStream() nullable")
-        outputStream.write(autoBackupData.jsonString.toByteArray())
-        outputStream.close()
-
-        //////
-
-        AutoBackup.upLastTimeCache(autoBackupData.unixTime)
+        val savedUri = getSavedUri() // Récupère l'URI sauvegardé
+        if (savedUri != null) {
+            // Utilise l'URI sauvegardé pour la sauvegarde
+            exportToUri(savedUri)
+        } else {
+            // Demande à l’utilisateur de sélectionner l'emplacement la première fois
+            val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/json"
+                putExtra(Intent.EXTRA_TITLE, "backup.json")
+            }
+            exportLauncher.launch(intent)
+        }
     }
 
+    // Lance l'Intent pour choisir un emplacement de sauvegarde
+    private val exportLauncher = App.instance.registerForActivityResult(ActivityResultContracts.CreateDocument()) { uri ->
+        if (uri != null) {
+            saveUri(uri) // Sauvegarde l'URI pour les prochaines sauvegardes
+            exportToUri(uri) // Sauvegarde immédiatement au nouvel emplacement choisi
+        }
+    }
+
+    // Fonction pour écrire les données dans l'URI donné
+    private fun exportToUri(uri: Uri) {
+        App.instance.contentResolver.openOutputStream(uri)?.use { outputStream ->
+            val autoBackupData = AutoBackup.buildAutoBackup()
+            outputStream.write(autoBackupData.jsonString.toByteArray())
+        }
+    }
+
+    // Sauvegarde l’URI pour une utilisation future
+    private fun saveUri(uri: Uri) {
+        val sharedPreferences = App.instance.getSharedPreferences("my_prefs", App.instance.MODE_PRIVATE)
+        sharedPreferences.edit().putString("backup_uri", uri.toString()).apply()
+    }
+
+    // Récupère l'URI sauvegardé
+    private fun getSavedUri(): Uri? {
+        val sharedPreferences = App.instance.getSharedPreferences("my_prefs", App.instance.MODE_PRIVATE)
+        val uriString = sharedPreferences.getString("backup_uri", null)
+        return uriString?.let { Uri.parse(it) }
+    }
+
+    // Nettoyage des anciennes sauvegardes
     @Throws
     fun cleanOld() {
         getAutoBackupsSortedDesc()
             .drop(10)
             .forEach { fileData ->
-                // todo log if resCode != 1
                 val resCode = App.instance.contentResolver.delete(
                     MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL),
                     MediaStore.Files.FileColumns._ID + "=?",
@@ -61,8 +86,7 @@ object AutoBackupAndroid {
             }
     }
 
-    private fun getVolume() = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
-
+    // Fonction pour trier et récupérer les sauvegardes existantes
     @Throws
     private fun getAutoBackupsSortedDesc(): List<MyFileData> {
         val cursor = App.instance.contentResolver.query(getVolume(), null, null, null, null)
@@ -71,10 +95,8 @@ object AutoBackupAndroid {
         cursor.use { cursor ->
             while (cursor.moveToNext()) {
                 val path = cursor.getString(cursor.getColumnIndex(MediaStore.Files.FileColumns.RELATIVE_PATH))
-                // Not checking the full path because it requires checking escaping symbols
                 if (!path.contains(AUTOBACKUPS_FOLDER_NAME))
                     continue
-
                 files.add(
                     MyFileData(
                         id = cursor.getString(cursor.getColumnIndex(MediaStore.Files.FileColumns._ID)),
@@ -87,11 +109,14 @@ object AutoBackupAndroid {
         return files.sortedByDescending { it.name }
     }
 
+    // Fonction pour obtenir la date de la dernière sauvegarde
     @Throws
     fun getLastTimeOrNull(): UnixTime? {
         val lastBackup = getAutoBackupsSortedDesc().firstOrNull()?.name ?: return null
         return Backup.fileNameToUnixTime(lastBackup)
     }
+
+    private fun getVolume() = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
 
     private class MyFileData(
         val id: String, // MediaStore.Files.FileColumns._ID
