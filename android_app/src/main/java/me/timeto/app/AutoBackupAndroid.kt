@@ -7,6 +7,8 @@ import androidx.annotation.RequiresApi
 import androidx.activity.result.contract.ActivityResultContracts
 import me.timeto.shared.*
 import kotlin.jvm.Throws
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @RequiresApi(Build.VERSION_CODES.Q) // MediaStore.MediaColumns.RELATIVE_PATH
 object AutoBackupAndroid {
@@ -28,12 +30,11 @@ object AutoBackupAndroid {
 
     @Throws
     suspend fun newBackup() {
-        val savedUri = getSavedUri() // Récupère l'URI sauvegardé
+        // Sauvegarde locale
+        val savedUri = getSavedUri()
         if (savedUri != null) {
-            // Utilise l'URI sauvegardé pour la sauvegarde
             exportToUri(savedUri)
         } else {
-            // Demande à l’utilisateur de sélectionner l'emplacement la première fois
             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "application/json"
@@ -41,13 +42,50 @@ object AutoBackupAndroid {
             }
             exportLauncher.launch(intent)
         }
+
+        // Export Supabase des dernières activités
+        try {
+            exportLatestActivitiesToSupabase()
+        } catch (e: Exception) {
+            // Log l'erreur mais ne bloque pas le processus de sauvegarde
+            reportApi("AutoBackupAndroid.newBackup() Supabase export error\n$e")
+        }
+    }
+
+    private suspend fun exportLatestActivitiesToSupabase() = withContext(Dispatchers.IO) {
+        try {
+            // Récupérer les dernières activités (dernières 24h par exemple)
+            val currentTime = UnixTime()
+            val oneDayAgo = currentTime.time - 86400 // 24h en secondes
+            
+            // Limite à 50 activités par export pour optimiser les performances
+            IntervalDb.getBetweenIdDesc(
+                timeStart = oneDayAgo,
+                timeFinish = currentTime.time,
+                limit = 50 // Réduit de 100 à 50 pour de meilleures performances
+            ).forEach { interval ->
+                val activity = interval.getActivity()
+                
+                // Enqueue l'export via WorkManager avec un tag pour le grouping
+                SupabaseExportWorker.enqueue(
+                    context = App.instance,
+                    timestamp = interval.id.toLong(),
+                    activityId = activity.id,
+                    activityName = activity.name,
+                    duration = interval.timer,
+                    note = interval.note
+                )
+            }
+        } catch (e: Exception) {
+            reportApi("AutoBackupAndroid.exportLatestActivitiesToSupabase()\n$e")
+        }
     }
 
     // Lance l'Intent pour choisir un emplacement de sauvegarde
     private val exportLauncher = App.instance.registerForActivityResult(ActivityResultContracts.CreateDocument()) { uri ->
         if (uri != null) {
-            saveUri(uri) // Sauvegarde l'URI pour les prochaines sauvegardes
-            exportToUri(uri) // Sauvegarde immédiatement au nouvel emplacement choisi
+            saveUri(uri)
+            exportToUri(uri)
         }
     }
 
@@ -59,7 +97,7 @@ object AutoBackupAndroid {
         }
     }
 
-    // Sauvegarde l’URI pour une utilisation future
+    // Sauvegarde l'URI pour une utilisation future
     private fun saveUri(uri: Uri) {
         val sharedPreferences = App.instance.getSharedPreferences("my_prefs", App.instance.MODE_PRIVATE)
         sharedPreferences.edit().putString("backup_uri", uri.toString()).apply()
@@ -72,7 +110,6 @@ object AutoBackupAndroid {
         return uriString?.let { Uri.parse(it) }
     }
 
-    // Nettoyage des anciennes sauvegardes
     @Throws
     fun cleanOld() {
         getAutoBackupsSortedDesc()
@@ -86,7 +123,6 @@ object AutoBackupAndroid {
             }
     }
 
-    // Fonction pour trier et récupérer les sauvegardes existantes
     @Throws
     private fun getAutoBackupsSortedDesc(): List<MyFileData> {
         val cursor = App.instance.contentResolver.query(getVolume(), null, null, null, null)
@@ -109,7 +145,6 @@ object AutoBackupAndroid {
         return files.sortedByDescending { it.name }
     }
 
-    // Fonction pour obtenir la date de la dernière sauvegarde
     @Throws
     fun getLastTimeOrNull(): UnixTime? {
         val lastBackup = getAutoBackupsSortedDesc().firstOrNull()?.name ?: return null
@@ -119,8 +154,8 @@ object AutoBackupAndroid {
     private fun getVolume() = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
 
     private class MyFileData(
-        val id: String, // MediaStore.Files.FileColumns._ID
-        val name: String, // MediaStore.Files.FileColumns.DISPLAY_NAME
-        val path: String, // MediaStore.Files.FileColumns.RELATIVE_PATH
+        val id: String,
+        val name: String,
+        val path: String,
     )
 }

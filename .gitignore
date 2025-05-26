@@ -13,3 +13,16 @@
 
 /ios_app/timeto.xcodeproj/xcuserdata/
 /ios_app/timeto.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Local configuration files
+
+# TEMPORAIRE : autorisé pour tests Android Studio
+# ❗ NE PAS OUBLIER DE REMETTRE 'local.properties' quand tu publies
+# local.properties
+
+.env
+*.env
+.env.*
+!.env.template
+!local.properties.template
+
