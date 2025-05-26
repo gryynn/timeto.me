@@ -109,8 +109,15 @@ android {
     // https://f-droid.org/en/docs/Reproducible_Builds/#png-crushcrunch
     packaging.resources { aaptOptions.cruncherEnabled = false }
 
-    compileOptions.sourceCompatibility = JavaVersion.VERSION_17
-    compileOptions.targetCompatibility = JavaVersion.VERSION_17
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
     buildFeatures.compose = true
     buildFeatures.buildConfig = true
