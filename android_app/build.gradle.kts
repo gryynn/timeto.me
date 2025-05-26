@@ -1,3 +1,7 @@
+import org.gradle.api.GradleException
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     kotlin("android")
     id("com.android.application")
@@ -5,11 +9,13 @@ plugins {
 }
 
 // Chargement sécurisé des propriétés
-fun loadLocalProperties(): java.util.Properties {
-    val properties = java.util.Properties()
+fun loadLocalProperties(): Properties {
+    val properties = Properties()
     val localPropertiesFile = rootProject.file("local.properties")
     if (localPropertiesFile.exists()) {
-        properties.load(localPropertiesFile.inputStream())
+        FileInputStream(localPropertiesFile).use { stream ->
+            properties.load(stream)
+        }
     } else {
         throw GradleException("""
             Le fichier local.properties est manquant.
@@ -20,7 +26,7 @@ fun loadLocalProperties(): java.util.Properties {
     return properties
 }
 
-fun getRequiredProperty(properties: java.util.Properties, key: String): String {
+fun getRequiredProperty(properties: Properties, key: String): String {
     return properties.getProperty(key) ?: run {
         throw GradleException("""
             La propriété '$key' est manquante dans local.properties.
