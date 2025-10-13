@@ -10,11 +10,13 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "me.timeto.app"
+        // TEMPORAIRE: applicationId modifié pour tester la sync en parallèle
+        // Original: "me.timeto.app" (à restaurer avant la PR finale)
+        applicationId = "me.timeto.app.sync"
         minSdk = 26
         targetSdk = 36
         versionCode = 593
-        versionName = "2025.10.11"
+        versionName = "2025.10.11.sync"
     }
 
     buildTypes {

@@ -35,6 +35,11 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
                 implementation("app.cash.sqldelight:primitive-adapters:$sqldelight_version")
                 implementation("app.cash.sqldelight:coroutines-extensions:$sqldelight_version")
+                
+                // Supabase pour la synchronisation
+                implementation("io.github.jan-tennert.supabase:postgrest-kt:2.6.1")
+                implementation("io.ktor:ktor-client-content-negotiation:$ktor_version")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
             }
         }
 
