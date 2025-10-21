@@ -37,9 +37,9 @@ class SyncVm : Vm<SyncVm.State>() {
             val now = time()
             val diff = now - timestamp
             return when {
-                diff < 60 -> "just now"
-                diff < 3600 -> "${diff / 60}m ago"
-                diff < 86400 -> "${diff / 3600}h ago"
+                diff < 60L -> "just now"
+                diff < 3600L -> "${diff / 60}m ago"
+                diff < 86400L -> "${diff / 3600}h ago"
                 else -> "${diff / 86400}d ago"
             }
         }

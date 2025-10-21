@@ -3,6 +3,7 @@ package me.timeto.shared.vm.settings
 import kotlinx.coroutines.flow.*
 import me.timeto.shared.launchExIo
 import me.timeto.shared.sync.*
+import me.timeto.shared.time
 import me.timeto.shared.vm.Vm
 import me.timeto.shared.zlog
 
@@ -32,9 +33,9 @@ class SupabaseSettingsVm : Vm<SupabaseSettingsVm.State>() {
                 val now = time()
                 val diff = now - lastSyncTime
                 when {
-                    diff < 60 -> "just now"
-                    diff < 3600 -> "${diff / 60}m ago"
-                    diff < 86400 -> "${diff / 3600}h ago"
+                    diff < 60L -> "just now"
+                    diff < 3600L -> "${diff / 60}m ago"
+                    diff < 86400L -> "${diff / 3600}h ago"
                     else -> "${diff / 86400}d ago"
                 }
             } else "Never"

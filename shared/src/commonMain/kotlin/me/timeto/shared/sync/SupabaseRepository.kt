@@ -81,8 +81,8 @@ class SupabaseRepository {
             if (!SupabaseConfig.isEnabled()) {
                 return@withContext SyncResult.failure(
                     "Supabase sync is disabled",
-                    0,
-                    time().toLong()
+                    0L,
+                    time()
                 )
             }
             
@@ -126,7 +126,7 @@ class SupabaseRepository {
             val errorMsg = e.message ?: "Unknown error"
             zlog("Supabase sync error: $errorMsg")
             
-            SyncResult.failure(errorMsg, duration, time().toLong())
+            SyncResult.failure(errorMsg, duration, time())
         }
     }
     
@@ -442,7 +442,7 @@ class SupabaseRepository {
             if (!SupabaseConfig.isEnabled()) {
                 return@withContext SyncResult.failure(
                     "Supabase sync is disabled",
-                    0,
+                    0L,
                     time()
                 )
             }
