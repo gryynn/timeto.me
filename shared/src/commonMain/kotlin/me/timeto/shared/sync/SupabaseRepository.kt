@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import me.timeto.shared.backups.Backup
 import me.timeto.shared.time
+import me.timeto.shared.timeMls
 import me.timeto.shared.zlog
 
 /**
@@ -82,7 +83,7 @@ class SupabaseRepository {
                 return@withContext SyncResult.failure(
                     "Supabase sync is disabled",
                     0L,
-                    time()
+                    timeMls()
                 )
             }
             
@@ -113,12 +114,12 @@ class SupabaseRepository {
             logSync(client, totalItems, errors.isEmpty(), errors.firstOrNull(), startTime)
             
             // Met à jour le timestamp local
-            SupabaseConfig.updateLastSyncTime(time().toLong())
+            SupabaseConfig.updateLastSyncTime(timeMls())
             
             if (errors.isEmpty()) {
-                SyncResult.success(totalItems, duration, time())
+                SyncResult.success(totalItems, duration, timeMls())
             } else {
-                SyncResult.failure(errors, duration, time())
+                SyncResult.failure(errors, duration, timeMls())
             }
             
         } catch (e: Exception) {
@@ -385,8 +386,8 @@ class SupabaseRepository {
             "kv_settings" -> mapOf(
                 "key" to entity[0].jsonPrimitive.content,
                 "value" to entity[1].jsonPrimitive.content,
-                "created_at" to time().toLong(),  // KV n'a pas d'ID timestamp
-                "updated_at" to time().toLong(),
+                "created_at" to timeMls(),  // KV n'a pas d'ID timestamp
+                "updated_at" to timeMls(),
                 "is_deleted" to false
             )
             
@@ -443,7 +444,7 @@ class SupabaseRepository {
                 return@withContext SyncResult.failure(
                     "Supabase sync is disabled",
                     0L,
-                    time()
+                    timeMls()
                 )
             }
 
@@ -477,12 +478,12 @@ class SupabaseRepository {
             logSync(client, totalItems, errors.isEmpty(), errors.firstOrNull(), startTime)
 
             // Met à jour le timestamp local
-            SupabaseConfig.updateLastSyncTime(time())
+            SupabaseConfig.updateLastSyncTime(timeMls())
 
             if (errors.isEmpty()) {
-                SyncResult.success(totalItems, duration, time())
+                SyncResult.success(totalItems, duration, timeMls())
             } else {
-                SyncResult.failure(errors, duration, time())
+                SyncResult.failure(errors, duration, timeMls())
             }
 
         } catch (e: Exception) {

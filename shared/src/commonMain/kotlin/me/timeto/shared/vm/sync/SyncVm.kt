@@ -5,6 +5,7 @@ import kotlinx.coroutines.launch
 import me.timeto.shared.launchExIo
 import me.timeto.shared.sync.*
 import me.timeto.shared.time
+import me.timeto.shared.timeMls
 import me.timeto.shared.vm.Vm
 import me.timeto.shared.zlog
 
@@ -81,7 +82,7 @@ class SyncVm : Vm<SyncVm.State>() {
             state.update { 
                 it.copy(
                     status = SyncStatus.ERROR,
-                    lastResult = SyncResult.failure("Supabase not configured", 0L, time())
+                    lastResult = SyncResult.failure("Supabase not configured", 0L, timeMls())
                 )
             }
             return
@@ -99,7 +100,7 @@ class SyncVm : Vm<SyncVm.State>() {
                         it.copy(
                             isSyncing = false,
                             status = SyncStatus.ERROR,
-                            lastResult = SyncResult.failure(error, 0L, time())
+                            lastResult = SyncResult.failure(error, 0L, timeMls())
                         )
                     }
                     return@launchExIo
@@ -129,7 +130,7 @@ class SyncVm : Vm<SyncVm.State>() {
                     it.copy(
                         isSyncing = false,
                         status = SyncStatus.ERROR,
-                        lastResult = SyncResult.failure(e.message ?: "Unknown error", 0L, time())
+                        lastResult = SyncResult.failure(e.message ?: "Unknown error", 0L, timeMls())
                     )
                 }
             }
