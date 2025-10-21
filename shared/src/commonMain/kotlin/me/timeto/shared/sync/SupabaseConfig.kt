@@ -22,11 +22,15 @@ object SupabaseConfig {
     private const val KEY_SUPABASE_KEY = "supabase_key"
     private const val KEY_SUPABASE_ENABLED = "supabase_enabled"
     private const val KEY_LAST_SYNC_TIME = "supabase_last_sync"
+    private const val KEY_SYNC_INTERVAL_HOURS = "supabase_sync_interval_hours"
+    private const val KEY_SYNC_PERIOD_DAYS = "supabase_sync_period_days"
     
     // Flows réactifs pour l'UI
     val urlFlow: Flow<String?> = getFlowFor(KEY_SUPABASE_URL)
     val keyFlow: Flow<String?> = getFlowFor(KEY_SUPABASE_KEY)
     val isEnabledFlow: Flow<Boolean> = getFlowFor(KEY_SUPABASE_ENABLED).map { it == "1" }
+    val syncIntervalHoursFlow: Flow<Int> = getFlowFor(KEY_SYNC_INTERVAL_HOURS).map { it?.toIntOrNull() ?: 6 }
+    val syncPeriodDaysFlow: Flow<Int> = getFlowFor(KEY_SYNC_PERIOD_DAYS).map { it?.toIntOrNull() ?: 7 }
     val lastSyncTimeFlow: Flow<Long> = getFlowFor(KEY_LAST_SYNC_TIME).map { it?.toLongOrNull() ?: 0L }
     
     val isConfiguredFlow: Flow<Boolean> = combine(
@@ -95,7 +99,23 @@ object SupabaseConfig {
     suspend fun updateLastSyncTime(time: Long) = dbIo {
         db.kVQueries.upsert(key = KEY_LAST_SYNC_TIME, value_ = time.toString())
     }
-    
+
+    /**
+     * Configure la fréquence de sync (heures)
+     */
+    suspend fun setSyncIntervalHours(hours: Int) = dbIo {
+        require(hours > 0) { "Sync interval must be positive" }
+        db.kVQueries.upsert(key = KEY_SYNC_INTERVAL_HOURS, value_ = hours.toString())
+    }
+
+    /**
+     * Configure la période de sync (jours)
+     */
+    suspend fun setSyncPeriodDays(days: Int) = dbIo {
+        require(days > 0) { "Sync period must be positive" }
+        db.kVQueries.upsert(key = KEY_SYNC_PERIOD_DAYS, value_ = days.toString())
+    }
+
     /**
      * Supprime toute la configuration
      */
@@ -104,6 +124,8 @@ object SupabaseConfig {
         db.kVQueries.deleteByKey(KEY_SUPABASE_KEY)
         db.kVQueries.deleteByKey(KEY_SUPABASE_ENABLED)
         db.kVQueries.deleteByKey(KEY_LAST_SYNC_TIME)
+        db.kVQueries.deleteByKey(KEY_SYNC_INTERVAL_HOURS)
+        db.kVQueries.deleteByKey(KEY_SYNC_PERIOD_DAYS)
     }
 }
 

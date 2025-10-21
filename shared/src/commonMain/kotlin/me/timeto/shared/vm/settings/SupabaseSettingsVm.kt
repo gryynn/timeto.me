@@ -21,13 +21,15 @@ class SupabaseSettingsVm : Vm<SupabaseSettingsVm.State>() {
         val lastSyncTime: Long = 0L,
         val isTestingConnection: Boolean = false,
         val testResult: String? = null,
+        val syncIntervalHours: Int = 6,  // Fréquence de sync par défaut
+        val syncPeriodDays: Int = 7,  // Période de sync par défaut
     ) {
         val isSaveEnabled: Boolean
             get() = url.isNotBlank() && key.isNotBlank()
         
         val lastSyncText: String
             get() = if (lastSyncTime > 0) {
-                val now = System.currentTimeMillis() / 1000
+                val now = time()
                 val diff = now - lastSyncTime
                 when {
                     diff < 60 -> "just now"
@@ -78,6 +80,18 @@ class SupabaseSettingsVm : Vm<SupabaseSettingsVm.State>() {
         SupabaseConfig.lastSyncTimeFlow
             .onEach { lastSyncTime ->
                 state.update { it.copy(lastSyncTime = lastSyncTime) }
+            }
+            .launchIn(scope)
+
+        SupabaseConfig.syncIntervalHoursFlow
+            .onEach { syncIntervalHours ->
+                state.update { it.copy(syncIntervalHours = syncIntervalHours) }
+            }
+            .launchIn(scope)
+
+        SupabaseConfig.syncPeriodDaysFlow
+            .onEach { syncPeriodDays ->
+                state.update { it.copy(syncPeriodDays = syncPeriodDays) }
             }
             .launchIn(scope)
     }
@@ -161,6 +175,54 @@ class SupabaseSettingsVm : Vm<SupabaseSettingsVm.State>() {
         launchExIo {
             SupabaseConfig.clearConfig()
             zlog("🗑️ Supabase config cleared")
+        }
+    }
+
+    fun setSyncPeriodDays(days: Int) {
+        if (days < 1) return  // Minimum 1 jour
+        launchExIo {
+            SupabaseConfig.setSyncPeriodDays(days)
+            state.update { it.copy(syncPeriodDays = days) }
+        }
+    }
+
+    fun fullSync() {
+        launchExIo {
+            try {
+                val result = repository.syncFull()
+                state.update {
+                    it.copy(
+                        testResult = if (result.success)
+                            "✅ Full sync completed: ${result.itemsSynced} items"
+                        else
+                            "❌ Full sync failed: ${result.errors?.firstOrNull() ?: "Unknown error"}"
+                    )
+                }
+                zlog("Full sync ${if (result.success) "successful" else "failed"}")
+            } catch (e: Exception) {
+                state.update { it.copy(testResult = "❌ Full sync error: ${e.message}") }
+                zlog("Full sync exception: ${e.message}")
+            }
+        }
+    }
+
+    fun syncNow() {
+        launchExIo {
+            try {
+                val result = repository.syncIncremental(days = state.value.syncPeriodDays)
+                state.update {
+                    it.copy(
+                        testResult = if (result.success)
+                            "✅ Sync completed: ${result.itemsSynced} items"
+                        else
+                            "❌ Sync failed: ${result.errors?.firstOrNull() ?: "Unknown error"}"
+                    )
+                }
+                zlog("Incremental sync ${if (result.success) "successful" else "failed"}")
+            } catch (e: Exception) {
+                state.update { it.copy(testResult = "❌ Sync error: ${e.message}") }
+                zlog("Incremental sync exception: ${e.message}")
+            }
         }
     }
 }

@@ -34,7 +34,7 @@ class SyncVm : Vm<SyncVm.State>() {
         
         private fun formatTime(timestamp: Long): String {
             // Simple format - peut être amélioré
-            val now = System.currentTimeMillis() / 1000
+            val now = time()
             val diff = now - timestamp
             return when {
                 diff < 60 -> "just now"
@@ -80,7 +80,7 @@ class SyncVm : Vm<SyncVm.State>() {
             state.update { 
                 it.copy(
                     status = SyncStatus.ERROR,
-                    lastResult = SyncResult.failure("Supabase not configured", 0, System.currentTimeMillis() / 1000)
+                    lastResult = SyncResult.failure("Supabase not configured", 0, time())
                 )
             }
             return
@@ -98,7 +98,7 @@ class SyncVm : Vm<SyncVm.State>() {
                         it.copy(
                             isSyncing = false,
                             status = SyncStatus.ERROR,
-                            lastResult = SyncResult.failure(error, 0, System.currentTimeMillis() / 1000)
+                            lastResult = SyncResult.failure(error, 0, time())
                         )
                     }
                     return@launchExIo
@@ -128,7 +128,7 @@ class SyncVm : Vm<SyncVm.State>() {
                     it.copy(
                         isSyncing = false,
                         status = SyncStatus.ERROR,
-                        lastResult = SyncResult.failure(e.message ?: "Unknown error", 0, System.currentTimeMillis() / 1000)
+                        lastResult = SyncResult.failure(e.message ?: "Unknown error", 0, time())
                     )
                 }
             }

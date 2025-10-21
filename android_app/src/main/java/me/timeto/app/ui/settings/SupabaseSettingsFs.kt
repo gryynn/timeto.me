@@ -182,6 +182,75 @@ fun SupabaseSettingsFs() {
                 }
             }
 
+            // Advanced Settings
+            if (state.isConfigured) {
+                item {
+                    FormPaddingSectionHeader()
+                    FormHeader("ADVANCED SETTINGS")
+                    FormPaddingHeaderSection()
+
+                    // Sync Frequency (hours)
+                    FormInput(
+                        initText = state.syncIntervalHours.toString(),
+                        placeholder = "6",
+                        onChange = { vm.setSyncIntervalHours(it.toIntOrNull() ?: 6) },
+                        isFirst = true,
+                        isLast = false,
+                        isAutoFocus = false,
+                        imeAction = ImeAction.Next,
+                    )
+
+                    // Sync Period (days)
+                    FormInput(
+                        initText = state.syncPeriodDays.toString(),
+                        placeholder = "7",
+                        onChange = { vm.setSyncPeriodDays(it.toIntOrNull() ?: 7) },
+                        isFirst = false,
+                        isLast = true,
+                        isAutoFocus = false,
+                        imeAction = ImeAction.Done,
+                    )
+                }
+
+                item {
+                    FormPaddingSectionHeader()
+
+                    // Full Sync Button (écrase les données distantes)
+                    FormButton(
+                        title = "Full Sync (Overwrite Remote)",
+                        note = "Replace all data in Supabase with current local data. Use carefully!",
+                        titleColor = c.orange,
+                        isFirst = true,
+                        isLast = false,
+                        onClick = {
+                            navigationFs.dialog { dialogLayer ->
+                                NavigationAlert(
+                                    message = "This will REPLACE all data in your Supabase database with your current local data. This action cannot be undone. Are you sure?",
+                                    withCancelButton = true,
+                                    buttonText = "Overwrite Remote",
+                                    buttonColor = c.red,
+                                    onButtonClick = {
+                                        vm.fullSync()
+                                        dialogLayer.close()
+                                    }
+                                )
+                            }
+                        },
+                    )
+
+                    // Sync Now Button (incrémentiel)
+                    FormButton(
+                        title = "Sync Now (${state.syncPeriodDays}d)",
+                        isFirst = false,
+                        isLast = true,
+                        titleColor = c.blue,
+                        onClick = {
+                            vm.syncNow()
+                        },
+                    )
+                }
+            }
+
             // Delete configuration
             if (state.isConfigured) {
                 item {

@@ -73,7 +73,7 @@ class SupabaseRepository {
      * @return SyncResult avec le status et les stats
      */
     suspend fun syncFull(): SyncResult = withContext(Dispatchers.IO) {
-        val startTime = System.currentTimeMillis()
+        val startTime = time() * 1000
         val errors = mutableListOf<String>()
         val stats = mutableMapOf<String, Int>()
         
@@ -107,7 +107,7 @@ class SupabaseRepository {
             syncEntity(client, "kv_settings", backup, stats, errors)
             
             val totalItems = stats.values.sum()
-            val duration = System.currentTimeMillis() - startTime
+            val duration = time() * 1000 - startTime
             
             // Log la sync dans Supabase
             logSync(client, totalItems, errors.isEmpty(), errors.firstOrNull(), startTime)
@@ -122,7 +122,7 @@ class SupabaseRepository {
             }
             
         } catch (e: Exception) {
-            val duration = System.currentTimeMillis() - startTime
+            val duration = time() * 1000 - startTime
             val errorMsg = e.message ?: "Unknown error"
             zlog("Supabase sync error: $errorMsg")
             
@@ -416,7 +416,7 @@ class SupabaseRepository {
                 } else {
                     put("error_message", JsonNull)
                 }
-                put("duration_ms", (System.currentTimeMillis() - startTime).toInt())
+                put("duration_ms", (time() * 1000 - startTime).toInt())
             }
             client.from("sync_log").insert(logData)
         } catch (e: Exception) {
@@ -424,6 +424,162 @@ class SupabaseRepository {
         }
     }
     
+    /**
+     * Synchronisation incrémentielle : Envoie seulement les données récentes
+     *
+     * Contrairement à syncFull() qui envoie TOUT, cette méthode filtre
+     * les données par âge (en jours) pour éviter les timeouts avec de gros volumes.
+     *
+     * @param days Nombre de jours de données à synchroniser (défaut: 7)
+     * @return SyncResult avec le status et les stats
+     */
+    suspend fun syncIncremental(days: Int = 7): SyncResult = withContext(Dispatchers.IO) {
+        val startTime = time() * 1000
+        val errors = mutableListOf<String>()
+        val stats = mutableMapOf<String, Int>()
+
+        try {
+            if (!SupabaseConfig.isEnabled()) {
+                return@withContext SyncResult.failure(
+                    "Supabase sync is disabled",
+                    0,
+                    time()
+                )
+            }
+
+            val client = getClient()
+
+            // Calculer le timestamp de cutoff (il y a X jours)
+            val cutoffTime = time() - (days * 24 * 60 * 60)
+
+            // Récupère le backup complet (réutilise le système existant !)
+            val backupJson = Backup.create(type = "supabase_sync_incremental")
+            val backup = Json.parseToJsonElement(backupJson).jsonObject
+
+            // Sync chaque type d'entité avec filtrage temporel
+            syncEntityIncremental(client, "goals", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "intervals", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "task_folders", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "tasks", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "checklists", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "checklist_items", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "events", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "event_templates", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "repeatings", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "notes", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "shortcuts", backup, cutoffTime, stats, errors)
+            syncEntityIncremental(client, "kv_settings", backup, cutoffTime, stats, errors)
+
+            val totalItems = stats.values.sum()
+            val duration = time() * 1000 - startTime
+
+            // Log la sync dans Supabase
+            logSync(client, totalItems, errors.isEmpty(), errors.firstOrNull(), startTime)
+
+            // Met à jour le timestamp local
+            SupabaseConfig.updateLastSyncTime(time())
+
+            if (errors.isEmpty()) {
+                SyncResult.success(totalItems, duration, time())
+            } else {
+                SyncResult.failure(errors, duration, time())
+            }
+
+        } catch (e: Exception) {
+            val duration = time() * 1000 - startTime
+            val errorMsg = e.message ?: "Unknown error"
+            zlog("Supabase incremental sync error: $errorMsg")
+
+            SyncResult.failure(errorMsg, duration, time())
+        }
+    }
+
+    /**
+     * Synchronise une table spécifique avec filtrage temporel
+     */
+    private suspend fun syncEntityIncremental(
+        client: io.github.jan.supabase.SupabaseClient,
+        tableName: String,
+        backup: JsonObject,
+        cutoffTime: Long,
+        stats: MutableMap<String, Int>,
+        errors: MutableList<String>
+    ) {
+        try {
+            // Map des noms de tables vers les clés du backup
+            val backupKey = when (tableName) {
+                "task_folders" -> "task_folders"
+                "checklist_items" -> "checklist_items"
+                "event_templates" -> "event_templates"
+                "kv_settings" -> "kv"
+                else -> tableName
+            }
+
+            val entities = backup[backupKey]?.jsonArray ?: return
+
+            if (entities.isEmpty()) {
+                stats[tableName] = 0
+                return
+            }
+
+            // Filtrer les entités récentes selon le cutoff
+            val recentEntities = entities.filter { entity ->
+                val entityArray = entity.jsonArray
+                when (tableName) {
+                    "goals", "intervals", "tasks", "checklists", "checklist_items",
+                    "events", "event_templates", "repeatings", "notes", "shortcuts" -> {
+                        // Ces entités ont leur ID comme timestamp de création
+                        val id = entityArray[0].jsonPrimitive.long
+                        id >= cutoffTime
+                    }
+                    "task_folders" -> {
+                        // Task folders utilisent aussi l'ID comme timestamp
+                        val id = entityArray[0].jsonPrimitive.long
+                        id >= cutoffTime
+                    }
+                    "kv_settings" -> {
+                        // KV settings n'ont pas de timestamp, on les sync tous
+                        true
+                    }
+                    else -> true
+                }
+            }
+
+            if (recentEntities.isEmpty()) {
+                stats[tableName] = 0
+                return
+            }
+
+            // Convertir les entities en maps pour Supabase
+            val data = recentEntities.mapNotNull { entity ->
+                try {
+                    entityToSupabaseMap(entity.jsonArray, tableName)
+                } catch (e: Exception) {
+                    zlog("Error mapping $tableName entity: ${e.message}")
+                    null
+                }
+            }
+
+            if (data.isEmpty()) {
+                stats[tableName] = 0
+                return
+            }
+
+            // Upsert par batch de 100 (limite Supabase)
+            data.chunked(100).forEach { batch ->
+                client.from(tableName).upsert(batch)
+            }
+
+            stats[tableName] = data.size
+            zlog("✅ Synced ${data.size} recent $tableName (last $cutoffTime)")
+
+        } catch (e: Exception) {
+            val error = "Error syncing $tableName: ${e.message}"
+            errors.add(error)
+            zlog("❌ $error")
+        }
+    }
+
     /**
      * Reset le client (force reconnexion)
      * Utile si les credentials changent
