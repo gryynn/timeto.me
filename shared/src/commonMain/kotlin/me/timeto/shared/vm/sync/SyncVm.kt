@@ -81,7 +81,7 @@ class SyncVm : Vm<SyncVm.State>() {
             state.update { 
                 it.copy(
                     status = SyncStatus.ERROR,
-                    lastResult = SyncResult.failure("Supabase not configured", 0, time())
+                    lastResult = SyncResult.failure("Supabase not configured", 0L, time())
                 )
             }
             return
@@ -99,7 +99,7 @@ class SyncVm : Vm<SyncVm.State>() {
                         it.copy(
                             isSyncing = false,
                             status = SyncStatus.ERROR,
-                            lastResult = SyncResult.failure(error, 0, time())
+                            lastResult = SyncResult.failure(error, 0L, time())
                         )
                     }
                     return@launchExIo
@@ -129,7 +129,7 @@ class SyncVm : Vm<SyncVm.State>() {
                     it.copy(
                         isSyncing = false,
                         status = SyncStatus.ERROR,
-                        lastResult = SyncResult.failure(e.message ?: "Unknown error", 0, time())
+                        lastResult = SyncResult.failure(e.message ?: "Unknown error", 0L, time())
                     )
                 }
             }
