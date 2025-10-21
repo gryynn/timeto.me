@@ -376,8 +376,20 @@ fun SettingsScreen(
                 FormPaddingHeaderSection()
 
                 FormButton(
-                    title = "Folders",
+                    title = "Supabase Sync",
                     isFirst = true,
+                    isLast = false,
+                    withArrow = true,
+                    onClick = {
+                        navigationFs.push {
+                            SupabaseSettingsFs()
+                        }
+                    },
+                )
+
+                FormButton(
+                    title = "Folders",
+                    isFirst = false,
                     isLast = false,
                     withArrow = true,
                     onClick = {

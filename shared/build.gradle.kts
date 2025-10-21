@@ -1,5 +1,6 @@
 plugins {
     kotlin("multiplatform")
+    kotlin("plugin.serialization") version "2.1.20"
     id("com.android.library")
     id("app.cash.sqldelight").version("2.1.0")
 }
@@ -36,8 +37,8 @@ kotlin {
                 implementation("app.cash.sqldelight:primitive-adapters:$sqldelight_version")
                 implementation("app.cash.sqldelight:coroutines-extensions:$sqldelight_version")
                 
-                // Supabase pour la synchronisation
-                implementation("io.github.jan-tennert.supabase:postgrest-kt:2.6.1")
+                // Supabase pour la synchronisation (version 3.x compatible Ktor 3.x)
+                implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.2")
                 implementation("io.ktor:ktor-client-content-negotiation:$ktor_version")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
             }

@@ -30,8 +30,10 @@ import me.timeto.app.ui.SpacerW1
 import me.timeto.app.ui.home.buttons.HomeButtonsView
 import me.timeto.app.ui.navigation.LocalNavigationFs
 import me.timeto.app.ui.privacy.PrivacyFs
+import me.timeto.app.ui.settings.SupabaseSettingsFs
 import me.timeto.app.ui.whats_new.WhatsNewFs
 import me.timeto.shared.vm.home.HomeVm
+import me.timeto.shared.vm.sync.SyncVm
 
 val HomeScreen__primaryFontSize = 16.sp
 
@@ -51,6 +53,10 @@ fun HomeScreen() {
 
     val (vm, state) = rememberVm {
         HomeVm()
+    }
+
+    val (syncVm, syncState) = rememberVm {
+        SyncVm()
     }
 
     val checklistDb = state.checklistDb
@@ -96,6 +102,19 @@ fun HomeScreen() {
                 },
             )
         }
+
+        // Supabase Sync Button
+        HomeSyncButtonView(
+            isSyncing = syncState.isSyncing,
+            status = syncState.status,
+            statusMessage = syncState.statusMessage,
+            isConfigured = syncState.isConfigured,
+            onClick = {
+                if (!syncState.isSyncing) {
+                    syncVm.syncNow()
+                }
+            },
+        )
 
         VStack(
             modifier = Modifier

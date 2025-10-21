@@ -156,24 +156,52 @@ class SupabaseRepository {
                 else -> tableName
             }
             
-            val entities = backup[backupKey]?.jsonArray ?: return
-            
-            if (entities.isEmpty()) {
+            val entities = backup[backupKey]?.jsonArray ?: run {
+                zlog("⚠️ No entities found for $tableName (key: $backupKey)")
                 stats[tableName] = 0
                 return
             }
             
-            // Convertit les entities en maps pour Supabase
-            val data = entities.mapNotNull { entity ->
+            if (entities.isEmpty()) {
+                zlog("⚠️ Empty entities for $tableName")
+                stats[tableName] = 0
+                return
+            }
+            
+            zlog("🔄 Syncing $tableName: ${entities.size} entities from backup")
+            
+            // Convertit les entities en JsonObject pour Supabase
+            var errorCount = 0
+            val data = entities.mapIndexedNotNull { index, entity ->
                 try {
-                    entityToSupabaseMap(entity.jsonArray, tableName)
+                    val map = entityToSupabaseMap(entity.jsonArray, tableName)
+                    // Convertir Map en JsonObject pour Supabase-kt 3.x
+                    buildJsonObject {
+                        map.forEach { (key, value) ->
+                            when (value) {
+                                null -> put(key, JsonNull)
+                                is Boolean -> put(key, value)
+                                is Number -> put(key, value)
+                                is String -> put(key, value)
+                                is JsonElement -> put(key, value)
+                                else -> put(key, value.toString())
+                            }
+                        }
+                    }
                 } catch (e: Exception) {
-                    zlog("Error mapping $tableName entity: ${e.message}")
+                    errorCount++
+                    zlog("❌ Error mapping $tableName entity #$index: ${e.message}")
+                    zlog("   Raw entity data: ${entity.jsonArray}")
                     null
                 }
             }
             
+            if (errorCount > 0) {
+                zlog("⚠️ $tableName: $errorCount/${entities.size} entities failed to map")
+            }
+            
             if (data.isEmpty()) {
+                zlog("❌ $tableName: All entities failed to map")
                 stats[tableName] = 0
                 return
             }
@@ -210,7 +238,10 @@ class SupabaseRepository {
             //         home_button_sort, color_rgba, keep_screen_on, pomodoro_timer
             "goals" -> mapOf(
                 "id" to entity[0].jsonPrimitive.long,
-                "parent_id" to entity.getOrNull(1)?.jsonPrimitive?.longOrNull,
+                "parent_id" to when (val parentElement = entity.getOrNull(1)) {
+                    is JsonNull, null -> null
+                    else -> parentElement.jsonPrimitive.longOrNull
+                },
                 "type_id" to entity[2].jsonPrimitive.int,
                 "name" to entity[3].jsonPrimitive.content,
                 "seconds" to entity[4].jsonPrimitive.int,
@@ -227,12 +258,15 @@ class SupabaseRepository {
             )
             
             // Intervals (IntervalDb.kt)
-            // Ordre : id, timer, goal_id, note
+            // Ordre RÉEL : id, timer, note, goal_id (confirmé dans backupable__backup)
             "intervals" -> mapOf(
                 "id" to entity[0].jsonPrimitive.long,
-                "timer" to entity[1].jsonPrimitive.int,
-                "goal_id" to entity[2].jsonPrimitive.long,
-                "note" to entity.getOrNull(3)?.jsonPrimitive?.contentOrNull,
+                "utc_time" to entity[1].jsonPrimitive.long,  // timer → utc_time dans Supabase
+                "note" to when (val noteElement = entity.getOrNull(2)) {
+                    is JsonNull, null -> ""
+                    else -> noteElement.jsonPrimitive.contentOrNull ?: ""
+                },
+                "goal_id" to entity[3].jsonPrimitive.long,
                 "created_at" to entity[0].jsonPrimitive.long,
                 "updated_at" to entity[0].jsonPrimitive.long,
                 "is_deleted" to false
@@ -314,7 +348,10 @@ class SupabaseRepository {
                 "last_day" to entity[2].jsonPrimitive.int,
                 "type_id" to entity[3].jsonPrimitive.int,
                 "value" to entity[4].jsonPrimitive.content,
-                "daytime" to entity.getOrNull(5)?.jsonPrimitive?.intOrNull,
+                "daytime" to when (val daytimeElement = entity.getOrNull(5)) {
+                    is JsonNull, null -> null
+                    else -> daytimeElement.jsonPrimitive.intOrNull
+                },
                 "is_important" to entity[6].jsonPrimitive.int,
                 "created_at" to entity[0].jsonPrimitive.long,
                 "updated_at" to entity[0].jsonPrimitive.long,
@@ -322,11 +359,11 @@ class SupabaseRepository {
             )
             
             // Notes (NoteDb.kt)
-            // Ordre : id, text, sort
+            // Ordre RÉEL : id, sort, text (confirmé dans backupable__backup)
             "notes" -> mapOf(
                 "id" to entity[0].jsonPrimitive.long,
-                "text" to entity[1].jsonPrimitive.content,
-                "sort" to entity[2].jsonPrimitive.int,
+                "sort" to entity[1].jsonPrimitive.int,
+                "text" to entity[2].jsonPrimitive.content,
                 "created_at" to entity[0].jsonPrimitive.long,
                 "updated_at" to entity[0].jsonPrimitive.long,
                 "is_deleted" to false
@@ -371,12 +408,17 @@ class SupabaseRepository {
         startTime: Long
     ) {
         try {
-            client.from("sync_log").insert(mapOf(
-                "total_items" to totalItems,
-                "success" to success,
-                "error_message" to errorMessage,
-                "duration_ms" to (System.currentTimeMillis() - startTime).toInt()
-            ))
+            val logData = buildJsonObject {
+                put("total_items", totalItems)
+                put("success", success)
+                if (errorMessage != null) {
+                    put("error_message", errorMessage)
+                } else {
+                    put("error_message", JsonNull)
+                }
+                put("duration_ms", (System.currentTimeMillis() - startTime).toInt())
+            }
+            client.from("sync_log").insert(logData)
         } catch (e: Exception) {
             zlog("⚠️ Failed to log sync: ${e.message}")
         }
