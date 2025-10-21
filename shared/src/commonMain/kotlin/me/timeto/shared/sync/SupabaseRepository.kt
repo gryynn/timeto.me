@@ -110,15 +110,15 @@ class SupabaseRepository {
             val duration = time() * 1000 - startTime
             
             // Log la sync dans Supabase
-            logSync(client, totalItems, errors.isEmpty(), errors.firstOrNull(), startTime)
+            logSync(client, totalItems.toLong(), errors.isEmpty(), errors.firstOrNull(), startTime)
             
             // Met à jour le timestamp local
             SupabaseConfig.updateLastSyncTime(time().toLong())
             
             if (errors.isEmpty()) {
-                SyncResult.success(totalItems, duration, time().toLong())
+                SyncResult.success(totalItems.toLong(), duration, time())
             } else {
-                SyncResult.failure(errors, duration, time().toLong())
+                SyncResult.failure(errors, duration, time())
             }
             
         } catch (e: Exception) {
@@ -474,13 +474,13 @@ class SupabaseRepository {
             val duration = time() * 1000 - startTime
 
             // Log la sync dans Supabase
-            logSync(client, totalItems, errors.isEmpty(), errors.firstOrNull(), startTime)
+            logSync(client, totalItems.toLong(), errors.isEmpty(), errors.firstOrNull(), startTime)
 
             // Met à jour le timestamp local
             SupabaseConfig.updateLastSyncTime(time())
 
             if (errors.isEmpty()) {
-                SyncResult.success(totalItems, duration, time())
+                SyncResult.success(totalItems.toLong(), duration, time())
             } else {
                 SyncResult.failure(errors, duration, time())
             }
